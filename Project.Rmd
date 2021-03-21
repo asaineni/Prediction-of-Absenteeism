@@ -1,0 +1,544 @@
+---
+title: "Project 530"
+author: "Akhila Saineni"
+date: "10/18/2020"
+output:
+  word_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+```{r load data}
+
+abst_train<-read.csv("Absenteeism_at_work_train.csv")
+abst_test<-read.csv("Absenteeism_at_work_test.csv")
+
+
+head(abst_train)
+summary(abst_train)
+
+
+abst_train$Age<- as.numeric(abst_train$Age)
+abst_test$Age<- as.numeric(abst_test$Age)
+
+
+
+
+
+#Create a new attribute based on number of absent hours
+ abst_train$absenteesim_group<- ifelse(abst_train$Absenteeism.time.in.hours==0,1,ifelse(abst_train$Absenteeism.time.in.hours<6,2,3))
+ abst_test$absenteesim_group<- ifelse(abst_test$Absenteeism.time.in.hours==0,1,ifelse(abst_test$Absenteeism.time.in.hours<6,2,3))
+
+ 
+ #NA Rows identification
+ as.matrix(colSums(is.na(abst_train)))
+ 
+ 
+ #Mean Substitution
+abst_train$Age[is.na(abst_train$Age)]=mean(abst_train$Age, na.rm = TRUE)
+abst_train$Weight[is.na(abst_train$Weight)]=mean(abst_train$Weight, na.rm = TRUE)
+abst_train$Hit.target[is.na(abst_train$Hit.target)]=mean(abst_train$Hit.target, na.rm = TRUE)
+  
+  
+
+  
+
+```
+
+
+
+
+
+
+
+
+
+
+```{r data feature selection}
+
+library(corrplot)
+
+m <- cor(abst_train[,c(-1,-2,-3,-4,-5,-6,-7,-8,-9,-10,-22)])
+
+corrplot(m,method = "number" )
+
+
+m2<-cor(abst_train[,c(-11,-12,-13,-14,-15,-16,-17,-18,-19,-20,-22)] )
+
+corrplot(m2,method = "number" )
+
+
+
+#We will be removing weight from the analysis & modeling since weight and BMI are highly correlated. 
+
+
+
+#Data Scaling 
+#Based on the variability in the work load average/ day and service time, We will be scaling the data from 0 to 1 for these 2 variables
+
+
+
+
+#abst_train["Service.time"]<-scale(abst_train["Service.time"])
+#abst_train["Work.load.Average.day"]<-scale(abst_train["Work.load.Average.day"])
+
+
+t.test(Absenteeism.time.in.hours~Social.smoker,data=abst_train, equal.varaiance=TRUE)
+
+
+t.test(Absenteeism.time.in.hours~Social.drinker,data=abst_train, equal.varaiance=TRUE)
+
+
+```
+
+
+
+```{r data explore}
+
+library(ggplot2)
+library(dplyr)
+#Bar plot of reason for absence
+
+
+
+data <- abst_train %>% group_by(Reason.for.absence) %>% summarise(total_hours=sum(Absenteeism.time.in.hours))
+ggplot(data=data,aes(x=as.factor(Reason.for.absence)))+ geom_bar(aes(y=total_hours), stat="identity", position = "dodge",fill="grey") + theme_classic()+
+  ggtitle("Absent Hours by Reason for Absence") +
+  xlab("Reason for Absence")
+
+
+#Diseases of the musculoskeletal system and connective tissue, Injury, poisoning and certain other consequences of external causes& medical consultation are the most common reasons for absence 
+
+
+#Month of Absence
+
+data <- abst_train %>% group_by(Month.of.absence) %>% summarise(total_hours=sum(Absenteeism.time.in.hours))
+ggplot(data=data,aes(x=as.factor(Month.of.absence)))+ geom_bar(aes(y=total_hours), stat="identity", position = "dodge",fill="blue") + theme_classic()+
+  ggtitle("Absent Hours by Month of absence ") +
+  xlab("Month of absence")
+
+
+
+
+
+
+data <- abst_train %>% group_by(Day.of.the.week) %>% summarise(total_hours=sum(Absenteeism.time.in.hours))
+ggplot(data=data,aes(x=as.factor(Day.of.the.week)))+ geom_bar(aes(y=total_hours), stat="identity", position = "dodge",fill="Pink") + theme_classic()+
+  ggtitle("Absent Hours by Day of the week") +
+  xlab("Day of the week")
+
+#More absent hours on monday
+
+
+
+ #Seasons 
+
+data <- abst_train %>% group_by(Seasons) %>% summarise(total_hours=sum(Absenteeism.time.in.hours))
+ggplot(data=data,aes(x=as.factor(Seasons)))+ geom_bar(aes(y=total_hours), stat="identity", position = "dodge",fill="Pink") + theme_classic()+
+  ggtitle(" Absent Hours by  Seasons ") +
+  xlab("Seasons")
+
+#Autumn and Spring have more absentees than summer and winter
+
+
+
+
+
+
+
+### Sons and Pets 
+
+
+
+
+ggplot(data=abst_train, aes(x=as.factor(Son),y=Absenteeism.time.in.hours, color=Son), na.rm = TRUE) +
+  geom_boxplot(fill = "#FFDB6D", show.legend = TRUE , na.rm = TRUE) +
+    coord_cartesian( ylim=c(0,25))+
+  theme_classic()+
+  ggtitle("Boxplot of Absent hours by Number of Children") +
+  xlab("Number of Children") +
+  ylab("Absent hours")
+
+
+  
+  
+
+
+ggplot(data=abst_train, aes(x=as.factor(Pet),y=Absenteeism.time.in.hours, color=Pet), na.rm = TRUE) +
+  geom_boxplot(fill = "#FFDB6D", show.legend = TRUE , na.rm = TRUE) +
+    coord_cartesian( ylim=c(0,25))+
+  theme_classic()+
+  ggtitle("Boxplot of Absent hours by Number of Pets") +
+  xlab("Number of Pets") +
+  ylab("Absent hours")
+
+
+
+
+#As the number of dependents increase such as children or pets, The median absent hours also increases. 
+
+
+
+
+
+data <- abst_train %>% group_by(Son) %>% summarise(mean_hours=mean(Absenteeism.time.in.hours))
+ggplot(data=data,aes(x=as.factor(Son)))+ geom_bar(aes(y=mean_hours), stat="identity", position = "dodge",fill="Pink") + theme_classic()+
+  ggtitle("Average Absent Hours by number of children ") +
+  xlab("Number of children")
+
+
+
+
+
+
+
+```
+
+
+
+
+
+```{r tree based classification}
+library(C50)
+abst_tree_model <- C5.0(x = abst_train[,c(-19,-21,-22)], y = as.factor(abst_train$absenteesim_group))
+summary(abst_tree_model)
+
+
+
+
+library(gmodels)
+abst_tree_pred <- predict(abst_tree_model, abst_test)
+
+
+ tab<-CrossTable(abst_test$absenteesim_group, abst_tree_pred, prop.chisq = FALSE, prop.c = FALSE, prop.r = FALSE, dnn = c(
+'Actual Absetnteesim Group', 'Predicted Absetnteesim Group'))
+
+ 
+ 
+ tab1<- table(abst_test$absenteesim_group,abst_tree_pred )
+  accuracy <- function(x){sum(diag(x)/(sum(rowSums(x)))) * 100}
+ accuracy(tab1)
+
+ 
+ #install.packages("ROCR")
+ 
+ 
+ 
+ 
+ 
+#library(ROCR)
+ 
+
+ 
+ 
+ 
+```
+#2 Random Forest 
+
+```{r random forest}
+
+library("randomForest")
+
+ abst_train$absenteesim_group <- as.factor( abst_train$absenteesim_group)
+abst_random_model <- randomForest(as.factor(absenteesim_group) ~ . , data= abst_train[,c(-1,-19,-21)])
+
+summary(abst_random_model)
+
+
+
+abst_rf_pred <- predict(abst_random_model, abst_test)
+
+tab2 <- table(abst_rf_pred, abst_test$absenteesim_group)
+
+'
+accuracy(tab2)'
+
+importance(abst_random_model)
+
+```
+
+
+
+#3 Adding regression to trees
+
+
+```{r model regression to trees}
+
+#install.packages("rpart.plot")
+library(rpart)
+
+
+m.rpart <- rpart(as.factor(absenteesim_group) ~ . , data= abst_train[,c(-1,-19,-21)])
+
+m.rpart
+
+library(rpart.plot)
+rpart.plot(m.rpart, digits=3)
+rpart.plot(m.rpart, digits=4, fallen.leaves = TRUE, type = 3, extra = 101)
+
+
+abst_rt_pred <- predict(m.rpart, abst_test, type='class')
+
+abst_rt_pred
+
+
+ tab21<- table(abst_test$absenteesim_group,abst_rt_pred )
+
+#High BMI, Social Drinker & High transportation expense may lead to more absent hours 
+accuracy(tab21)
+
+
+
+
+
+```
+
+
+
+```{r naive_bayes_model}
+#install.packages("naivebayes")
+
+library("naivebayes")
+
+
+naive_model <- naive_bayes(as.factor(absenteesim_group) ~ . , data= abst_train[,c(-1,-19,-21)])
+naive_model
+summary(naive_model)
+
+
+naive_table<- table(predict(naive_model, abst_test), abst_test$absenteesim_group)
+naive_table
+
+accuracy(naive_table)
+
+
+```
+
+
+```{r naive__bayes_model12}
+library(corrplot)
+library(colorspace)
+library(ggplot2)
+library(minqa)
+library(nloptr)
+library(lattice)
+library(caTools)
+library(MatrixModels)
+library(tmvnsim)
+library(psych)
+library("generics")
+library("gower")
+library(caret)
+
+
+
+#Correlation matrix 
+m <- cor(abst_train[,c(-21,-22)])
+
+m
+
+corrplot(m)
+#Feature selection 
+highlycor <- findCorrelation(m, 0.30)
+
+highlycor
+
+abst_train_filtered<-abst_train[,c(-19,-21)]
+
+
+filteredData <- abst_train_filtered[, -(highlycor[5]+1)]
+
+
+library("naivebayes")
+
+nb_model <- naive_bayes(absenteesim_group ~ ., data=filteredData)
+
+summary(nb_model)
+
+
+filteredTestPred <- predict(nb_model, newdata = abst_test)
+naive_table2<-table(filteredTestPred, abst_test$absenteesim_group)
+
+
+accuracy(naive_table2)
+
+```
+```{r svm}
+
+library(kernlab)
+
+classifier <- ksvm(absenteesim_group ~ ., data = abst_train[,c(-19,-21)], kernel = "vanilladot")
+summary(classifier)
+classifier
+
+
+
+classifier_predictions <- predict(classifier, abst_test) 
+svm_acc_table<-table(classifier_predictions, abst_test$absenteesim_group)
+
+accuracy(svm_acc_table)
+
+
+```
+
+
+```{r svm poly}
+classifier_poly <- ksvm(absenteesim_group ~ ., data = abst_train[,c(-19,-21)], kernel = "polydot")
+summary(classifier_poly)
+classifier_poly
+
+
+
+predictions_poly <- predict(classifier_poly, abst_test) 
+svm_acc_table_poly<-table(predictions_poly, abst_test$absenteesim_group)
+
+accuracy(svm_acc_table_poly)
+
+
+
+```
+
+```{r svm rbf}
+classifier_rbf <- ksvm(absenteesim_group ~ ., data = abst_train[,c(-19,-21)], kernel = "rbfdot")
+summary(classifier_rbf)
+classifier_rbf
+
+
+
+predictions_rbf <- predict(classifier_rbf, abst_test) 
+svm_acc_table_rbf<-table(predictions_rbf, abst_test$absenteesim_group)
+
+accuracy(svm_acc_table_rbf)
+
+```
+
+
+
+
+```{r knn}
+
+library(class)
+
+
+
+
+
+
+
+pr<-knn(train =abst_train[,c(-21)] , test =abst_test[,c(-21)], cl=abst_train[,c(-19,-21)]$absenteesim_group, k=13)
+
+ tab <- table(pr,abst_test$absenteesim_group)
+ 
+ tab
+ 
+ accuracy(tab)
+ 
+ 
+ 
+
+```
+
+
+Summary: 
+Based on the accuracy results of the above models, We can conclude that the Regression tree  provides the best accuracy(75%) and the most important features based on Gini score are as follows: 
+
+Reason for absence
+Disciplinary Failure
+Work load average 
+Transportation Expense 
+Month and Day of week 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Task 2- Optional (extra credit)
+
+```{r continious TREE}
+
+#Tree
+
+#install.packages("tree")
+
+
+library(tree)
+
+
+
+tree2<-tree(Absenteeism.time.in.hours ~ . , data= abst_train[,c(-1,-19,-22)])
+
+summary(tree2)
+
+
+yhat<-predict(tree2,newdata=abst_test[,c(-1,-19,-22)])
+
+
+#Mean square error
+mean((yhat-abst_test$Absenteeism.time.in.hours)^2)
+
+
+```
+
+
+```{r continious Random Forest}
+
+# Random Forest
+
+library("randomForest")
+
+abst_random_model_c <- randomForest(Absenteeism.time.in.hours ~ . , data= abst_train[,c(-1,-19,-22)])
+
+summary(abst_random_model_c)
+
+
+
+abst_rf_pred2 <- predict(abst_random_model_c, abst_test)
+
+
+plot(abst_rf_pred2,abst_test$Absenteeism.time.in.hours)
+abline(0,1)
+
+
+#Mean square error
+mean((abst_rf_pred2-abst_test$Absenteeism.time.in.hours)^2)
+
+
+
+importance(abst_random_model_c)
+
+```
+
+```{r continious Regression}
+
+library(nnet) 
+glfit <- multinom(Absenteeism.time.in.hours ~ ., data= abst_train[,c(-1,-19,-22)]) 
+
+summary(glfit) 
+
+
+
+```
+
+
+
+
